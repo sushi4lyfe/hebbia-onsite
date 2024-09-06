@@ -11,8 +11,7 @@ model = SentenceTransformer('all-MiniLM-L6-v2')
 pinecone_db = PineConeDB.instance()
 
 def get_metadata_from_filename(filename):
-    # TODO(JSHU): Make it work for nested files in folders
-    pattern = r"(?P<company>.+?) \| (?P<filing>\w+-\w+) \((?P<date>.+?)\)\.html"
+    pattern = r"(?P<company>.+?) \| (?P<filing>\w+-\w+)\/?A? \((?P<date>.+?)\)\.html"
     # Use re.match to apply the pattern
     match = re.match(pattern, filename)
     metadata = {'filename': filename}
@@ -21,7 +20,7 @@ def get_metadata_from_filename(filename):
         metadata['filing_type'] = match.group("filing")
         metadata['human_readable_date'] = match.group("date")
         date_object = datetime.strptime(match.group("date"), "%B %d, %Y")
-        metadata['date'] = date_object.timestamp()
+        metadata['date'] = str(int(date_object.timestamp()))
         metadata['filename'] = filename
     print(f"Saved metadata {metadata} to mongodb")
     return metadata
@@ -32,7 +31,6 @@ def html_parser(filename, html_content):
     if mongo_collection.count_documents({"filename": metadata['filename']}) > 0:
         print(f"File {metadata['filename']} has already been parsed")
         return
-    mongo_collection.insert_one(metadata)
     # Parse the HTML content using BeautifulSoup
     soup = BeautifulSoup(html_content, "html.parser")
     # Detect tables in data and store 
@@ -45,7 +43,7 @@ def html_parser(filename, html_content):
     text = soup.get_text(separator=' ', strip=True)
     entries = []
     # Splits with newlines may be too long
-    for text_chunk in re.split('; |. |, |_____|\*|\n', text):
+    for text_chunk in re.split('; |\. |, |_____|\*|\n', text):
         # Remove leading/trailing whitespaces
         cleaned_text = text_chunk.strip()
         if cleaned_text:
@@ -64,6 +62,8 @@ def html_parser(filename, html_content):
         print(f"Results of pinecone insertion in html_parser: {results}")
     except Exception as e:
         print(f"Error inserting entries into pinecone in html_parser {e}")
+        return
+    mongo_collection.insert_one(metadata)
 
 def extract_table_data(soup):
     # Find all tables in the HTML

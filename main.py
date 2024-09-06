@@ -1,4 +1,5 @@
 import os
+import threading
 import uvicorn
 import boto3
 
@@ -66,8 +67,8 @@ async def get_filters():
 class Query(BaseModel):
     query: str
     companies: Optional[list[str]] = []
-    minimum_date: Optional[int] = None
-    maximum_date: Optional[int] = None
+    minimum_date: Optional[str] = None
+    maximum_date: Optional[str] = None
     filings: Optional[list[str]] = []
 
 @app.get("/search", response_class=HTMLResponse)
@@ -116,14 +117,19 @@ async def process():
         return
 
     num_files = 0
+    threads = []
     for obj in objects['Contents']:
         key = obj['Key']
         if key.endswith('.html'):
             print(f"Processing HTML file: {key}")
             html_object = s3.get_object(Bucket=S3_BUCKET, Key=key)
             html_content = html_object['Body'].read().decode('utf-8')
-            parser.html_parser(key, html_content)
-
+            t = threading.Thread(target=parser.html_parser, args=(key, html_content))
+            t.start()
+            threads.append(t)
+            num_files += 1
+    for t in threads:
+        t.join()
     return f"Processed {num_files} files"
 
 if __name__ == "__main__":
