@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hebbia</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Hebbia Chat</h1>
+
+    <form id="searchForm" action="/search" method="post">
+        <div id="filtersContainer">
+            <!-- Dynamic checkboxes will be injected here -->
+        </div>
+        <label for="query">Enter your search query:</label><br><br>
+        <input type="text" id="query" name="query" required><br><br>
+        <button type="submit">Search</button>
+    </form>
+
+    <div id="result">
+        <strong>Result:</strong>
+        <div id="output"><table id="arrayTable"></table></div>
+    </div>
+    <script>
+        // Fetch filters from the backend
+        fetch("/filters")
+            .then(response => response.json())
+            .then(filters => {
+                const filtersContainer = document.getElementById('filtersContainer');
+
+                // Iterate over each filter category (e.g., companies, filings)
+                Object.keys(filters).forEach(category => {
+                    // Create a container for the current filter category
+                    const filterGroup = document.createElement('div');
+                    filterGroup.className = 'filter-group';
+                    const label = document.createElement('label');
+                    label.textContent = category.charAt(0).toUpperCase() + category.slice(1) + ":"; // Capitalize the category name
+                    filterGroup.appendChild(label);
+                    filterGroup.appendChild(document.createElement('br')); // Line break
+
+                    // Create a set of checkboxes for each option in the category
+                    filters[category].forEach(option => {
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.name = `${category}`; // Use array notation for multiple selections
+                        checkbox.value = option;
+
+                        const checkboxLabel = document.createElement('label');
+                        checkboxLabel.textContent = option;
+                        // Add checkbox and label to the filter group
+                        filterGroup.appendChild(checkbox);
+                        filterGroup.appendChild(checkboxLabel);
+                        filterGroup.appendChild(document.createElement('br')); // Line break
+                    });
+                    // Append the filter group to the form
+                    filtersContainer.appendChild(filterGroup);
+                });
+            })
+            .catch(error => console.error('Error fetching filters:', error));
+
+        function generateTable(array) {
+            const table = document.getElementById("arrayTable");
+            table.innerHTML = "";  // Clear the table content
+            // Create table rows and cells
+            array.forEach(row => {
+                const tr = document.createElement("tr");  // Create a new row
+                row.forEach(cell => {
+                    const td = document.createElement("td");  // Create a new cell
+                    td.textContent = cell;  // Set the cell content
+                    tr.appendChild(td);  // Append the cell to the row
+                });
+                table.appendChild(tr);  // Append the row to the table
+            });
+            return table;
+        }
+        // Handle form submission
+        document.getElementById('searchForm').addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent the form from submitting in the traditional way
+
+            const formData = new FormData(this);
+            const selectedFilters = {};
+            formData.forEach((value, key) => {
+                if (!selectedFilters[key]) {
+                    selectedFilters[key] = [];
+                }
+                selectedFilters[key].push(value);
+            });
+            selectedFilters["query"] = selectedFilters['query'][0];
+            console.log('Selected filters:', JSON.stringify(selectedFilters));    
+            fetch('http://0.0.0.0:80/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'  // Set content type to JSON
+                },
+                body: JSON.stringify(selectedFilters),       
+            }).then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                // Return the response as JSON
+                return response.json();
+            }).then(data => {
+                console.log(data, typeof data, data["result"]);
+                var arr = data["result"];
+                var output = document.getElementById('output');
+                console.log("Output", output);
+                output.appendChild(generateTable(arr));
+            }).catch(error => {
+                // Handle errors here
+                console.error('Error during the POST request:', error);
+            });
+        }); 
+    </script>
+</body>
+</html>
