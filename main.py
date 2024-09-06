@@ -1,5 +1,6 @@
 import os
 import uvicorn
+import boto3
 
 from db.mongo import MongoDB
 from db.pinecone import PineConeDB
@@ -16,8 +17,9 @@ from utils import parser
 app = FastAPI()
 pinecone_db = PineConeDB.instance()
 model = SentenceTransformer('all-MiniLM-L6-v2')
-
 html_directory = "frontend"
+
+S3_BUCKET = "hebbia-jshu"
 
 # Middleware to allow connections from React
 app.add_middleware(
@@ -104,24 +106,25 @@ async def search(query: Query):
 
 @app.get("/process")
 async def process():
+    s3 = boto3.client('s3',
+        aws_access_key_id=os.getenv('AWS_ACCESS_KEY'),
+        aws_secret_access_key=os.getenv('AWS_SECRET_KEY')
+    )
+    objects = s3.list_objects_v2(Bucket=S3_BUCKET)
+    if 'Contents' not in objects:
+        print("No files found in the bucket.")
+        return
+
     num_files = 0
-    num_folders = 0
-    directory = "data"
-    for filename in os.listdir(directory):
-        file_path = os.path.join(directory, filename)    
-        if os.path.isdir(file_path):
-            print(f"Processing folder: {file_path}")
-            for filename in os.listdir(directory):
-                file_path = os.path.join(directory, filename)
-                print(f"Processing file: {file_path}")
-                # TODO(JSHU): Parse files in folders recursively
-                num_files += 1
-            num_folders += 1
-        elif os.path.isfile(file_path):
-            print(f"Processing file: {file_path}")
-            parser.html_parser(file_path)
-            num_files += 1
-    return f"Processed {num_files} files and {num_folders} folders"
+    for obj in objects['Contents']:
+        key = obj['Key']
+        if key.endswith('.html'):
+            print(f"Processing HTML file: {key}")
+            html_object = s3.get_object(Bucket=S3_BUCKET, Key=key)
+            html_content = html_object['Body'].read().decode('utf-8')
+            parser.html_parser(key, html_content)
+
+    return f"Processed {num_files} files"
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

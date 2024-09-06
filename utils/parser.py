@@ -26,16 +26,8 @@ def get_metadata_from_filename(filename):
     print(f"Saved metadata {metadata} to mongodb")
     return metadata
 
-def html_parser(pathname):
-    filename = pathname.split("/")[-1]
+def html_parser(filename, html_content):
     metadata = get_metadata_from_filename(filename)
-    # Open and read the file
-    with open(pathname, "r", encoding="utf-8") as file:
-        try:
-            html_content = file.read()
-        except Exception as e:
-            print(f"Error reading file {filename}: {str(e)}")
-            return
     mongo_collection = MongoDB.get_collection("hebbia", "documents")
     if mongo_collection.count_documents({"filename": metadata['filename']}) > 0:
         print(f"File {metadata['filename']} has already been parsed")
